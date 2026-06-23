@@ -9,6 +9,14 @@ It is designed around an **Entra ID (Azure AD) group** that represents your
 developers (`app_devs`), but works with any identity provider or with
 Databricks-native groups.
 
+## Before you start - read these and setup SCIM
+
+- Documentation to read: https://docs.databricks.com/aws/en/admin/users-groups/scim/
+- Videos
+  - Advancing Analytics - Provision Databricks Users through SCIM: https://www.youtube.com/watch?v=QU8uxFkox1c
+  - Next Gen Lakehouse - SCIM Provisioning: https://youtu.be/AWPGQJRK6lo?si=g6FXeEXgpWhiV-3M
+
+
 ## What gets created
 
 | File | Resources |
