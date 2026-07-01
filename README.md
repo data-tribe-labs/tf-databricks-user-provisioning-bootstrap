@@ -162,3 +162,60 @@ terraform validate
   group.
 - The sandbox catalog is named `sandbox_<env>` with `experiments` and `triage`
   schemas; the group gets create/use privileges on both.
+
+
+
+## How Authentication Works with SSO
+
+```mermaid
+%%{init: {'themeVariables': {'fontSize': '15px', 'actorFontSize': '15px', 'signalFontSize': '14px', 'noteFontSize': '13px'}}}%%
+sequenceDiagram
+    actor User
+    participant Browser
+    participant DBX as Databricks<br/>(account console /<br/>workspace)
+    participant Entra as Microsoft Entra ID<br/>(OIDC IdP)
+    participant UC as Unity Catalog
+
+    User->>Browser: Navigate to<br/>Databricks URL
+    Browser->>DBX: Request access<br/>(no valid session)
+    DBX-->>Browser: 302 redirect to Entra<br/>(OIDC authorization request)
+    Browser->>Entra: Authorization request<br/>(client_id, scopes, redirect_uri)
+    Entra->>User: Prompt for<br/>credentials + MFA
+    User->>Entra: Authenticate
+    Entra-->>Browser: Authorization code<br/>(to Databricks redirect URL)
+    Browser->>DBX: Deliver<br/>authorization code
+    DBX->>Entra: Exchange code for ID token<br/>(token endpoint)
+    Entra-->>DBX: ID token (signed JWT:<br/>identity + group claims)
+    DBX->>DBX: Validate token,<br/>match SCIM-provisioned user
+    DBX->>UC: Resolve entitlements from<br/>Entra group membership
+    DBX-->>Browser: Establish<br/>authenticated session
+    Browser-->>User: Workspace access<br/>(UC-governed)
+    Note over DBX,Entra: Unified login — one account-level<br/>OIDC config governs all workspaces.<br/>SCIM keeps users/groups in sync.
+```
+
+
+## How On-behalf-of User Authentication works (OBO)
+
+```mermaid
+%%{init: {'themeVariables': {'fontSize': '15px', 'actorFontSize': '15px', 'signalFontSize': '14px', 'noteFontSize': '13px'}}}%%
+sequenceDiagram
+    actor User
+    participant App as Databricks App<br/>(agent front door)
+    participant AS as MLflow<br/>AgentServer
+    participant Agent as Agent code
+    participant Res as Databricks resource<br/>(SQL / Vector Search /<br/>Genie / UC fn)
+    participant UC as Unity Catalog
+
+    User->>App: Query agent<br/>(authenticated via Entra SSO session)
+    App->>App: Downscope user credentials<br/>to declared API scopes
+    App->>AS: Forward downscoped token<br/>(x-forwarded-access-token header)
+    AS->>AS: Store token<br/>per request
+    AS->>Agent: Invoke /<br/>stream handler
+    Agent->>AS: get_user_workspace_client()
+    AS-->>Agent: Workspace client bound<br/>to user identity
+    Agent->>Res: Call resource<br/>as the user
+    Res->>UC: Authorize request
+    UC-->>Res: Enforce grants +<br/>row filters / column masks
+    Res-->>Agent: Scoped result<br/>(only what the user may see)
+    Agent-->>User: Response
+```
